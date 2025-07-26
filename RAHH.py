@@ -11,50 +11,52 @@ st.set_page_config(
 )
 
 # --- JAVASCRIPT & HTML COMPONENT ---
-# This function generates the HTML for the spinning wheel component.
-def create_wheel_component(options, winner_to_land_on):
+def create_wheel_component(options, is_spinning=False, winner_to_land_on=None):
+    """
+    Generates the HTML for the wheel. Can be static or spinning.
+    - is_spinning=False: Renders a static, non-interactive wheel.
+    - is_spinning=True: Renders a wheel that immediately spins and lands on the winner.
+    """
     options_json = json.dumps(options)
     winner_json = json.dumps(winner_to_land_on)
 
-    # CRASH FIX: The `key` argument was removed from the components.html call.
+    # Conditionally generate the JavaScript for spinning or static display
+    if is_spinning:
+        animation_script = f"""
+            const winner = {winner_json};
+            const winningSegment = theWheel.segments.find(s => s && s.text === winner);
+            if (winningSegment) {{
+                let stopAt = theWheel.getRandomForSegment(winningSegment.segmentNumber);
+                theWheel.animation.stopAngle = stopAt;
+            }}
+            theWheel.startAnimation();
+        """
+    else:
+        animation_script = "theWheel.draw(); // Draw static wheel"
+
     component_html = f"""
     <!DOCTYPE html>
     <html>
     <head>
-        <title>Winwheel.js Simple Wheel</title>
+        <title>Winwheel.js Wheel</title>
         <style>
             body, html {{ margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background-color: transparent; }}
-            #canvasContainer {{ position: relative; width: 400px; height: 400px; }}
-            #spin_button_in_canvas {{
-                position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-                background: #fff; color: #333; border: 3px solid #333; border-radius: 50%;
-                width: 80px; height: 80px; font-size: 1.2em; font-weight: bold; cursor: default; z-index: 10;
-            }}
         </style>
     </head>
     <body>
-        <div id="canvasContainer">
-            <canvas id='canvas' width='400' height='400'></canvas>
-            <button id="spin_button_in_canvas">SPIN!</button>
-        </div>
+        <canvas id='canvas' width='400' height='400'></canvas>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/winwheeljs@2.8.0/dist/Winwheel.min.js"></script>
         <script>
             (function() {{
                 const options = {options_json};
-                const winner = {winner_json};
                 const segments = options.map(opt => ({{'text': opt.text, 'fillStyle': opt.fillStyle}}));
                 let theWheel = new Winwheel({{
                     'numSegments'  : segments.length, 'outerRadius'  : 180, 'innerRadius'  : 40,
-                    'textFontSize' : 16, 'segments' : segments,
+                    'textFontSize' : 16, 'segments' : segments, 'pointerAngle' : 90,
                     'animation'    : {{ 'type': 'spinToStop', 'duration': 6, 'spins': 8, 'callbackFinished': () => {{}} }}
                 }});
-                const winningSegment = theWheel.segments.find(s => s && s.text === winner);
-                if (winningSegment) {{
-                    let stopAt = theWheel.getRandomForSegment(winningSegment.segmentNumber);
-                    theWheel.animation.stopAngle = stopAt;
-                }}
-                theWheel.startAnimation();
+                {animation_script}
             }})();
         </script>
     </body>
@@ -62,8 +64,11 @@ def create_wheel_component(options, winner_to_land_on):
     """
     return components.html(component_html, height=410, width=410)
 
-
 # --- MAIN APP LOGIC ---
+# Set admin status based on URL query parameter
+if st.query_params.get("mode") == "admin":
+    st.session_state.is_admin = True
+
 st.title("🎡 Spin Wheel")
 
 # --- SESSION STATE INITIALIZATION ---
@@ -71,72 +76,73 @@ if 'options' not in st.session_state:
     st.session_state.options = ["Pizza", "Burger", "Tacos", "Salad", "Sushi", "Pasta"]
 if 'winner' not in st.session_state:
     st.session_state.winner = None
-if 'admin_mode' not in st.session_state:
-    st.session_state.admin_mode = False
+if 'fast_spin' not in st.session_state:
+    st.session_state.fast_spin = False
+if 'is_admin' not in st.session_state:
+    st.session_state.is_admin = False
 
 # --- SIDEBAR CONTROLS ---
 with st.sidebar:
     st.header("⚙️ Controls")
-
-    # UI IMPROVEMENT: Larger text area for options
-    options_text = st.text_area(
-        "Options (one per line)",
-        value="\n".join(st.session_state.options),
-        height=250
-    )
-
+    options_text = st.text_area("Options (one per line)", value="\n".join(st.session_state.options), height=250)
+    
     if st.button("Update Wheel"):
         st.session_state.options = [opt.strip() for opt in options_text.split("\n") if opt.strip()]
         st.session_state.winner = None
         st.rerun()
 
     st.markdown("---")
-
-    # UI IMPROVEMENT: Nameless toggle for admin mode
-    st.session_state.admin_mode = st.toggle(
-        "Enable Winner Override",
-        key='admin_mode_toggle',
-        help="Show controls to force a specific winner."
+    
+    # Fast Spin toggle is visible to everyone
+    st.session_state.fast_spin = st.toggle(
+        "Fast Spin",
+        key='fast_spin_toggle',
+        help="Skip the spin animation for an instant result."
     )
-
-    if st.session_state.admin_mode:
-        st.info("🤫 Admin Mode Activated")
-        # UI IMPROVEMENT: Select winner by number
+    
+    # The Winner Override controls ONLY appear if admin AND fast spin are enabled
+    rigged_winner_index = None
+    if st.session_state.is_admin and st.session_state.fast_spin:
+        st.info("🤫 Admin Controls Enabled")
         rigged_winner_index = st.number_input(
             "Winner Number (1, 2, 3...)",
             min_value=1,
             max_value=len(st.session_state.options) if st.session_state.options else 1,
-            step=1,
-            value=None,
-            placeholder="Enter # to force win..."
+            step=1, value=None, placeholder="Enter # to force win..."
         )
-    else:
-        rigged_winner_index = None
 
 # --- MAIN PAGE ---
 if not st.session_state.options:
     st.warning("Please add some options in the sidebar to create the wheel.")
 else:
+    # Always prepare colors for the wheel display
+    if 'option_colors' not in st.session_state or len(st.session_state.option_colors) != len(st.session_state.options):
+        st.session_state.option_colors = {opt: f'hsl({random.randint(0, 360)}, 70%, 80%)' for opt in st.session_state.options}
+    options_with_colors = [{'text': opt, 'fillStyle': st.session_state.option_colors.get(opt)} for opt in st.session_state.options]
+    
+    # Determine the winner when the spin button is clicked
     if st.button("SPIN!", type="primary", use_container_width=True):
+        st.session_state.winner = None # Clear previous winner to ensure rerun shows animation
         winner_determined = False
-        # LOGIC CHANGE: Check for the rigged index number
         if rigged_winner_index is not None and 0 < rigged_winner_index <= len(st.session_state.options):
-            # User enters 1-based index, Python uses 0-based
             st.session_state.winner = st.session_state.options[rigged_winner_index - 1]
             winner_determined = True
-
+        
         if not winner_determined:
             st.session_state.winner = random.choice(st.session_state.options)
 
-    if st.session_state.winner:
-        if 'option_colors' not in st.session_state or len(st.session_state.option_colors) != len(st.session_state.options):
-            st.session_state.option_colors = {opt: f'hsl({random.randint(0, 360)}, 70%, 80%)' for opt in st.session_state.options}
-
-        options_with_colors = [{'text': opt, 'fillStyle': st.session_state.option_colors.get(opt)} for opt in st.session_state.options]
-
+    # Display logic: Show wheel, animation, or result based on state
+    if st.session_state.winner is None:
+        # Before any spin, show the static wheel
+        st.info("Click the SPIN! button to start.")
+        create_wheel_component(options_with_colors, is_spinning=False)
+    elif st.session_state.fast_spin:
+        # If fast spin is on, just show the result text
+        st.success(f"## Winner: **{st.session_state.winner}**")
+        st.balloons()
+    else:
+        # Otherwise, show the spinning wheel animation
         with st.container():
-            create_wheel_component(options_with_colors, st.session_state.winner)
+            create_wheel_component(options_with_colors, is_spinning=True, winner_to_land_on=st.session_state.winner)
             st.success(f"## Winner: **{st.session_state.winner}**")
             st.balloons()
-    else:
-        st.info("Click the SPIN! button to see the wheel.")
