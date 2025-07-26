@@ -1,6 +1,10 @@
 import streamlit as st
 import random
 import time
+import base64
+
+# --- The GIF is now embedded directly in the code ---
+WHEEL_GIF_BASE64 = "R0lGODlhfQJ9APcAAAD/AACa/wCaAAAAzP8AzACZ/wCZAMz/AMwAMwD/MwAAmQAzmQAzzDMA/zMAAJkzmZkzzJkAM5kzAJkzAACZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACH/C05FVFNDQVBFMi4wAwEAAAAh+QQFAAD/ACwAAAAAfQJ9AAAI/wD/CRxIsKDBgwgTKlzIsKHDhxAjSpxIsaLFixgzatzIsaPHjyBDihxJsqTJkyhTqlzJsqXLlzBjypxJs6bNmzhz6tzJs6fPn0CDCh1KtKjRo0iTKl3KtKnTp1CjSp1KtarVq1izat3KtavXr2DDih1LtqzZs2jTql3Ltq3bt3Djyp1Lt67du3jz6t3Lt6/fv4ADCx5MuLDhw4gTK17MuLHjx5AjS55MubLly5gza97MubPnz6BDix5NurTpxgAAOw=="
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
@@ -14,8 +18,6 @@ if 'is_admin' not in st.session_state:
     st.session_state.is_admin = st.query_params.get("mode") == "admin"
 if 'options' not in st.session_state:
     st.session_state.options = ["Pizza", "Burger", "Tacos", "Salad", "Sushi", "Pasta"]
-if 'winner' not in st.session_state:
-    st.session_state.winner = None
 if 'fast_spin' not in st.session_state:
     st.session_state.fast_spin = False
 
@@ -28,7 +30,6 @@ with st.sidebar:
     
     if st.button("Update Options"):
         st.session_state.options = [opt.strip() for opt in options_text.split("\n") if opt.strip()]
-        st.session_state.winner = None # Reset winner when options change
         st.rerun()
 
     st.markdown("---")
@@ -44,30 +45,30 @@ with st.sidebar:
         )
 
 # --- MAIN PAGE LOGIC ---
-placeholder = st.empty() # A container for the wheel or the result
-
-if st.session_state.winner:
-    # If a winner has been determined, show it.
-    placeholder.success(f"## Winner: **{st.session_state.winner}**")
-    st.balloons()
-else:
-    # Otherwise, show an info message.
-    placeholder.info("Click the SPIN! button to start.")
+placeholder = st.empty()
+placeholder.info("Click the SPIN! button to start.")
 
 if st.button("SPIN!", type="primary", use_container_width=True):
     # Determine the winner
     if rigged_winner_index is not None:
-        st.session_state.winner = st.session_state.options[rigged_winner_index - 1]
+        winner = st.session_state.options[rigged_winner_index - 1]
     else:
-        st.session_state.winner = random.choice(st.session_state.options)
+        winner = random.choice(st.session_state.options)
 
+    # If Fast Spin is on, just show the result immediately
     if st.session_state.fast_spin:
-        # If fast spin is on, just rerun to show the winner immediately
-        st.rerun()
+        placeholder.success(f"## Winner: **{winner}**")
+        st.balloons()
     else:
-        # Show the spinning wheel GIF
-        placeholder.image("https://i.gifer.com/origin/d7/d7ac42a5933e38181658421a52108502_w200.gif", use_column_width=True)
+        # Display the embedded GIF using markdown
+        placeholder.markdown(
+            f'<img src="data:image/gif;base64,{WHEEL_GIF_BASE64}" alt="Spinning Wheel">',
+            unsafe_allow_html=True,
+        )
+        
         # Wait for 3 seconds while the GIF plays
         time.sleep(3)
-        # Rerun the script to show the winner
-        st.rerun()
+        
+        # Replace the GIF with the winner message
+        placeholder.success(f"## Winner: **{winner}**")
+        st.balloons()
