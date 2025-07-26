@@ -11,10 +11,12 @@ st.set_page_config(
 )
 
 # --- JAVASCRIPT & HTML COMPONENT ---
-def create_wheel_component(options, winner_to_land_on, key):
+# This function generates the HTML for the spinning wheel component.
+def create_wheel_component(options, winner_to_land_on):
     options_json = json.dumps(options)
     winner_json = json.dumps(winner_to_land_on)
 
+    # CRASH FIX: The `key` argument was removed from the components.html call.
     component_html = f"""
     <!DOCTYPE html>
     <html>
@@ -58,7 +60,7 @@ def create_wheel_component(options, winner_to_land_on, key):
     </body>
     </html>
     """
-    return components.html(component_html, height=410, width=410, key=key)
+    return components.html(component_html, height=410, width=410)
 
 
 # --- MAIN APP LOGIC ---
@@ -69,51 +71,71 @@ if 'options' not in st.session_state:
     st.session_state.options = ["Pizza", "Burger", "Tacos", "Salad", "Sushi", "Pasta"]
 if 'winner' not in st.session_state:
     st.session_state.winner = None
-if 'spin_key' not in st.session_state:
-    st.session_state.spin_key = 0
+if 'admin_mode' not in st.session_state:
+    st.session_state.admin_mode = False
 
 # --- SIDEBAR CONTROLS ---
 with st.sidebar:
     st.header("⚙️ Controls")
-    options_text = st.text_area("Options (one per line)", value="\n".join(st.session_state.options), height=150)
-    
+
+    # UI IMPROVEMENT: Larger text area for options
+    options_text = st.text_area(
+        "Options (one per line)",
+        value="\n".join(st.session_state.options),
+        height=250
+    )
+
     if st.button("Update Wheel"):
         st.session_state.options = [opt.strip() for opt in options_text.split("\n") if opt.strip()]
         st.session_state.winner = None
         st.rerun()
 
-    # --- UPDATED: HIDDEN RIGGING MECHANISM ---
-    # The rigging input only appears if the URL has "?mode=admin"
-    if st.query_params.get("mode") == "admin":
-        st.markdown("---")
+    st.markdown("---")
+
+    # UI IMPROVEMENT: Nameless toggle for admin mode
+    st.session_state.admin_mode = st.toggle(
+        "Enable Winner Override",
+        key='admin_mode_toggle',
+        help="Show controls to force a specific winner."
+    )
+
+    if st.session_state.admin_mode:
         st.info("🤫 Admin Mode Activated")
-        rigged_winner_input = st.text_input(
-            "Winner Override",
-            placeholder="Enter option to force win..."
-        ).strip()
+        # UI IMPROVEMENT: Select winner by number
+        rigged_winner_index = st.number_input(
+            "Winner Number (1, 2, 3...)",
+            min_value=1,
+            max_value=len(st.session_state.options) if st.session_state.options else 1,
+            step=1,
+            value=None,
+            placeholder="Enter # to force win..."
+        )
     else:
-        # If not in admin mode, this variable must still exist but be empty
-        rigged_winner_input = ""
+        rigged_winner_index = None
 
 # --- MAIN PAGE ---
 if not st.session_state.options:
     st.warning("Please add some options in the sidebar to create the wheel.")
 else:
     if st.button("SPIN!", type="primary", use_container_width=True):
-        st.session_state.spin_key += 1
-        if rigged_winner_input and rigged_winner_input in st.session_state.options:
-            st.session_state.winner = rigged_winner_input
-        else:
+        winner_determined = False
+        # LOGIC CHANGE: Check for the rigged index number
+        if rigged_winner_index is not None and 0 < rigged_winner_index <= len(st.session_state.options):
+            # User enters 1-based index, Python uses 0-based
+            st.session_state.winner = st.session_state.options[rigged_winner_index - 1]
+            winner_determined = True
+
+        if not winner_determined:
             st.session_state.winner = random.choice(st.session_state.options)
 
     if st.session_state.winner:
         if 'option_colors' not in st.session_state or len(st.session_state.option_colors) != len(st.session_state.options):
             st.session_state.option_colors = {opt: f'hsl({random.randint(0, 360)}, 70%, 80%)' for opt in st.session_state.options}
-        
+
         options_with_colors = [{'text': opt, 'fillStyle': st.session_state.option_colors.get(opt)} for opt in st.session_state.options]
-        
+
         with st.container():
-            create_wheel_component(options_with_colors, st.session_state.winner, key=f"spin_{st.session_state.spin_key}")
+            create_wheel_component(options_with_colors, st.session_state.winner)
             st.success(f"## Winner: **{st.session_state.winner}**")
             st.balloons()
     else:
