@@ -4,8 +4,12 @@ import time
 import matplotlib.pyplot as plt
 import io
 
-# --- The self-contained GIF for the 'spinning' phase ---
-WHEEL_GIF_BASE64 = "R0lGODlhfQJ9APcAAAD/AACa/wCaAAAAzP8AzACZ/wCZAMz/AMwAMwD/MwAAmQAzmQAzzDMA/zMAAJkzmZkzzJkAM5kzAJkzAACZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACH/C05FVFNDQVBFMi4wAwEAAAAh+QQFAAD/ACwAAAAAfQJ9AAAI/wD/CRxIsKDBgwgTKlzIsKHDhxAjSpxIsaLFixgzatzIsaPHjyBDihxJsqTJkyhTqlzJsqXLlzBjypxJs6bNmzhz6tzJs6fPn0CDCh1KtKjRo0iTKl3KtKnTp1CjSp1KtarVq1izat3KtavXr2DDih1LtqzZs2jTql3Ltq3bt3Djyp1Lt67du3jz6t3Lt6/fv4ADCx5MuLDhw4gTK17MuLHjx5AjS55MubLly5gza97MubPnz6BDix5NurTpxgAAOw=="
+# --- PAGE CONFIGURATION ---
+st.set_page_config(
+    page_title="Spin Wheel",
+    page_icon="🎡",
+    layout="centered"
+)
 
 # --- Function to draw the pie chart wheel ---
 def create_wheel(options, rotation_angle=0):
@@ -13,27 +17,21 @@ def create_wheel(options, rotation_angle=0):
     Creates a Matplotlib pie chart with visible labels and a specific rotation.
     """
     plt.figure(figsize=(8, 8))
-    # Make slices equal
     sizes = [1] * len(options)
-    
-    # Use a set of high-contrast default colors from Matplotlib
-    colors = plt.cm.get_cmap('tab20').colors[:len(options)]
+    colors = [f"#{abs(hash(opt)) % 0xFFFFFF:06x}" for opt in options]
 
     fig, ax = plt.subplots(figsize=(8, 8))
     
-    # Draw the pie chart with specified rotation and text properties
+    # Draw the pie chart with specified rotation and text properties for visibility
     ax.pie(sizes, labels=options, colors=colors,
-           startangle=90 + rotation_angle,  # This rotates the wheel
+           startangle=90 + rotation_angle,
            counterclock=False,
            wedgeprops={'edgecolor': 'white', 'linewidth': 2},
-           textprops={'fontsize': 14, 'weight': 'bold'}) # Ensure labels are visible
+           textprops={'fontsize': 14, 'weight': 'bold'})
     
     ax.set_aspect('equal')
-    
-    # Draw a static pointer at the top
     ax.arrow(0, 1.1, 0, -0.3, head_width=0.1, head_length=0.1, fc='black', ec='black', lw=2)
     
-    # Save the plot to a memory buffer to display in Streamlit
     buf = io.BytesIO()
     plt.savefig(buf, format='png', transparent=True)
     buf.seek(0)
@@ -84,30 +82,33 @@ if st.button("SPIN!", type="primary", use_container_width=True):
         placeholder.success(f"## Winner: **{winner}**")
         st.balloons()
     else:
-        # Step A: Show the spinning placeholder
-        placeholder.markdown(
-            f'<div style="text-align: center;"><img src="data:image/gif;base64,{WHEEL_GIF_BASE64}" alt="Spinning..."></div>',
-            unsafe_allow_html=True,
-        )
-        time.sleep(3) # Wait for the animation to "play"
-
-        # Step B: Calculate the final rotation to place the winner at the top
+        # 3. PERFORM FRAME-BY-FRAME ANIMATION
         winner_index = st.session_state.options.index(winner)
         slice_angle = 360 / len(st.session_state.options)
-        final_rotation = - (winner_index * slice_angle + slice_angle / 2)
+        target_rotation = - (winner_index * slice_angle + slice_angle / 2)
+        total_rotation = 360 * 3 + target_rotation
+        num_frames = 60
         
-        # Step C: Draw the final wheel rotated to the winner
-        final_wheel_img = create_wheel(st.session_state.options, rotation_angle=final_rotation)
+        for i in range(num_frames + 1):
+            # Calculate current rotation with an easing effect
+            progress = 1 - (1 - (i / num_frames))**3
+            current_rotation = progress * total_rotation
+            
+            # Create and display the current frame of the wheel
+            wheel_frame = create_wheel(st.session_state.options, rotation_angle=current_rotation)
+            placeholder.image(wheel_frame, use_container_width=True)
+            time.sleep(0.02) # A short delay between frames
         
-        # FIX: Changed use_column_width to use_container_width
-        placeholder.image(final_wheel_img, use_container_width=True)
+        # 4. SHOW FINAL RESULT
+        # Redraw the final wheel perfectly positioned
+        final_wheel = create_wheel(st.session_state.options, rotation_angle=target_rotation)
+        placeholder.image(final_wheel, use_container_width=True)
         st.success(f"## Winner: **{winner}**")
         st.balloons()
 else:
     # Show the initial static wheel before the first spin
     if st.session_state.options:
         initial_wheel_img = create_wheel(st.session_state.options)
-        # FIX: Changed use_column_width to use_container_width
         placeholder.image(initial_wheel_img, use_container_width=True)
     else:
         placeholder.warning("Please add some options in the sidebar.")
